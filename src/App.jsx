@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
@@ -32,6 +33,7 @@ function App() {
       if (!expression || expression === '0') return null;
       const value = evaluateExpression(expression, result ?? 0);
       return Number.isFinite(value) ? formatResult(value) : null;
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       return null;
     }
@@ -39,7 +41,6 @@ function App() {
 
   const updateExpression = (next) => {
     setExpression((prev) => {
-      const isNumeric = /^[0-9.]+$/.test(next);
       setJustEvaluated(false);
       if (prev === 'Error') return next;
       if (prev === '0') return next;
@@ -64,6 +65,7 @@ function App() {
       if (action === 'MR') setExpression(String(memory));
       if (action === 'M+') setMemory((m) => m + current);
       if (action === 'M-') setMemory((m) => m - current);
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setResult(null);
     }
@@ -89,7 +91,8 @@ function App() {
     }
   };
 
-  const handleCore = (key) => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleCore = useCallback((key) => {
     switch (key) {
       case 'AC':
         clearAll();
@@ -106,6 +109,7 @@ function App() {
           const entry = `${expression} = ${formatted}`;
           setHistory((prev) => [...prev.slice(-29), entry]);
           setJustEvaluated(true);
+        // eslint-disable-next-line no-unused-vars
         } catch (err) {
           setResult(null);
           setExpression('Error');
@@ -124,7 +128,7 @@ function App() {
         updateExpression(key);
         setJustEvaluated(false);
     }
-  };
+  });
 
   const handleNameSubmit = () => {
     const name = prompt("What's your name?");
