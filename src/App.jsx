@@ -1,131 +1,129 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
+const SCIENTIFIC_KEYS = [
+  'sin', 'cos', 'tan', 'log', 'ln', '√', 'x²', '^', '1/x', '|x|', 'n!', '%'
+];
+
+const MEMORY_KEYS = ['MC', 'MR', 'M+', 'M-'];
+
+const CORE_KEYS = [
+  'AC', 'DEL', '(', ')', '7', '8', '9', '÷',
+  '4', '5', '6', '×', '1', '2', '3', '-',
+  '0', '.', 'π', '+', 'ANS', '='
+];
+
 function App() {
-  const [display, setDisplay] = useState('0');
-  const [memory, setMemory] = useState(0); // Memory storage
-  const [userName, setUserName] = useState('');
-  const [history, setHistory] = useState([]);
+  const [expression, setExpression] = useState('0');
+  const [result, setResult] = useState(null);
+  const [memory, setMemory] = useState(0);
+  const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('history') || '[]'));
   const [showHistory, setShowHistory] = useState(false);
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Calculator');
+  const [justEvaluated, setJustEvaluated] = useState(false);
 
   useEffect(() => {
-    const storedName = localStorage.getItem('userName');
-    const storedHistory = JSON.parse(localStorage.getItem('history')) || [];
-    if (storedName) {
-      setUserName(storedName);
-    } else {
-      handleNameSubmit(); // Prompt for name if not already set
-    }
-    setHistory(storedHistory);
-  }, []);
+    localStorage.setItem('history', JSON.stringify(history));
+  }, [history]);
 
-  const handleButtonClick = (label) => {
-    if (label === 'AC') {
-      setDisplay('0'); 
-    } else if (label === 'DEL') {
-      setDisplay(display.length > 1 ? display.slice(0, -1) : '0'); // Delete last character
-    } else if (label === '=') {
-      try {
-        const result = evalExpression(display).toString();
-        setDisplay(result);
-        const newHistory = [...history, `${display} = ${result}`];
-        setHistory(newHistory);
-        localStorage.setItem('history', JSON.stringify(newHistory));
-      } catch (error) {
-        setDisplay('Error'); // Handle any errors in evaluation
-      }
-    } else if (label === '√') {
-      try {
-        setDisplay(Math.sqrt(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'x²') {
-      try {
-        setDisplay(Math.pow(eval(display), 2).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'log') {
-      try {
-        setDisplay(Math.log10(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'In') {
-      try {
-        setDisplay(Math.log(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'π') {
-      setDisplay(display === '0' ? Math.PI.toString() : display + Math.PI);
-    } else if (label === '(-)') {
-      setDisplay(display.startsWith('-') ? display.slice(1) : '-' + display);
-    } else if (label === 'hyp') {
-      const sides = display.split(',').map(Number);
-      if (sides.length === 2) {
-        const hypotenuse = Math.sqrt(Math.pow(sides[0], 2) + Math.pow(sides[1], 2));
-        setDisplay(hypotenuse.toString());
-      } else {
-        setDisplay('Error: Enter two sides');
-      }
-    } else if (label === 'sin') {
-      try {
-        setDisplay(Math.sin(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'cos') {
-      try {
-        setDisplay(Math.cos(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'tan') {
-      try {
-        setDisplay(Math.tan(eval(display)).toString());
-      } catch (error) {
-        setDisplay('Error');
-      }
-    } else if (label === 'RCL') {
-      setDisplay(memory.toString()); // Recall memory
-    } else if (label === 'M+') {
-      setMemory(memory + eval(display)); // Add current display to memory
-      setDisplay('0'); // Reset display after storing
-    } else if (label === 'M-') {
-      setMemory(memory - eval(display)); // Subtract current display from memory
-      setDisplay('0'); // Reset display after storing
-    } else if (label === 'n!') {
-      const num = eval(display);
-      if (num < 0) {
-        setDisplay('Error: Negative number');
-      } else {
-        setDisplay(factorial(num).toString());
-      }
-    } else if (label === 'HIS') {
-      setShowHistory(true);
-    } else {
-      // If display is '0', replace it with the new input
-      if (display === '0') {
-        setDisplay(label);
-      } else {
-        setDisplay(display + label); // Append the new input
-      }
+  const preview = useMemo(() => {
+    if (justEvaluated) return null;
+    try {
+      if (!expression || expression === '0') return null;
+      const value = evaluateExpression(expression, result ?? 0);
+      return Number.isFinite(value) ? formatResult(value) : null;
+    } catch (err) {
+      return null;
+    }
+  }, [expression, result, justEvaluated]);
+
+  const updateExpression = (next) => {
+    setExpression((prev) => {
+      const isNumeric = /^[0-9.]+$/.test(next);
+      setJustEvaluated(false);
+      if (prev === 'Error') return next;
+      if (prev === '0') return next;
+      return prev + next;
+    });
+  };
+
+  const clearAll = () => {
+    setExpression('0');
+    setResult(null);
+    setJustEvaluated(false);
+  };
+
+  const backspace = () => {
+    setExpression((prev) => (prev.length <= 1 ? '0' : prev.slice(0, -1)));
+  };
+
+  const handleMemory = (action) => {
+    try {
+      const current = evaluateExpression(expression, result ?? 0);
+      if (action === 'MC') setMemory(0);
+      if (action === 'MR') setExpression(String(memory));
+      if (action === 'M+') setMemory((m) => m + current);
+      if (action === 'M-') setMemory((m) => m - current);
+    } catch (err) {
+      setResult(null);
     }
   };
 
-  const evalExpression = (expression) => {
-    // Replace 'x' with '*' for multiplication and '÷' with '/' for division
-    expression = expression.replace(/x/g, '*').replace(/÷/g, '/');
-    // Evaluate the expression
-    return eval(expression);
+  const appendFunction = (fn) => {
+    if (fn === '√') {
+      updateExpression('√(');
+    } else if (fn === 'x²') {
+      setExpression((prev) => `${prev}^2`);
+    } else if (fn === '^') {
+      updateExpression('^');
+    } else if (fn === '1/x') {
+      setExpression((prev) => `1/(${prev})`);
+    } else if (fn === '|x|') {
+      setExpression((prev) => `abs(${prev})`);
+    } else if (fn === 'n!') {
+      setExpression((prev) => `${prev}!`);
+    } else if (fn === '%') {
+      updateExpression('%');
+    } else {
+      updateExpression(`${fn}(`);
+    }
   };
 
-  const factorial = (n) => {
-    if (n < 0) return 'Error: Negative number';
-    if (n === 0 || n === 1) return 1;
-    return n * factorial(n - 1);
+  const handleCore = (key) => {
+    switch (key) {
+      case 'AC':
+        clearAll();
+        return;
+      case 'DEL':
+        backspace();
+        return;
+      case '=':
+        try {
+          const value = evaluateExpression(expression, result ?? 0);
+          const formatted = formatResult(value);
+          setResult(value);
+          setExpression(String(formatted));
+          const entry = `${expression} = ${formatted}`;
+          setHistory((prev) => [...prev.slice(-29), entry]);
+          setJustEvaluated(true);
+        } catch (err) {
+          setResult(null);
+          setExpression('Error');
+          setJustEvaluated(false);
+        }
+        return;
+      case 'ANS':
+        updateExpression(String(result ?? 0));
+        setJustEvaluated(false);
+        return;
+      case 'π':
+        updateExpression('π');
+        setJustEvaluated(false);
+        return;
+      default:
+        updateExpression(key);
+        setJustEvaluated(false);
+    }
   };
 
   const handleNameSubmit = () => {
@@ -136,74 +134,152 @@ function App() {
     }
   };
 
-  const closeHistory = () => {
-    setShowHistory(false);
-  };
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const { key } = event;
+      const allowed = '0123456789+-*/().';
+      if (allowed.includes(key)) {
+        event.preventDefault();
+        updateExpression(key === '*' ? '×' : key === '/' ? '÷' : key);
+      } else if (key === 'Enter') {
+        event.preventDefault();
+        handleCore('=');
+      } else if (key === 'Backspace') {
+        event.preventDefault();
+        backspace();
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        clearAll();
+      }
+    };
 
-  const clearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem('history');
-  };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [clearAll, backspace, handleCore]);
 
   return (
-    <>
-      <div className="flex justify-center items-center">
-        <main className='bg-gray-800 rounded-lg shadow-lg p-4'>
-          <h1 className='text-white text-2xl mb-4 text-center'>{userName || "Calculator"}</h1>
-          <section className='bg-gray-900 text-white w-full h-16 flex items-center justify-end p-4 text-3xl border border-gray-700 rounded-lg'>
-            {display}
-          </section>
-          <section className='flex flex-col mt-4'>
-            <article className='grid grid-cols-4 gap-2'>
-              {["AC", "DEL", "√", "x²", "log", "In", "(-)", "π", "hyp", "sin", "cos", "tan", "RCL", "M+", "M-", "HIS", "(", ")"].map(label => (
-                <div key={label} className="flex justify-center">
-                  <Button 
-                    label={label} 
-                    onClick={handleButtonClick} 
-                    bgColor={label === 'AC' ? 'bg-green-500' : label === 'DEL' ? 'bg-red-500' : 'bg-gray-700'} 
-                  />
-                </div>
+    <div className="page">
+      <header className="page__header">
+        <div>
+          <p className="eyebrow">Advanced Digital Calculator</p>
+          <h1 className="title">{userName}</h1>
+        </div>
+        <div className="header__actions">
+          {!userName && <button className="ghost" onClick={handleNameSubmit}>Set Name</button>}
+          <button className="ghost" onClick={() => setShowHistory(true)}>History</button>
+        </div>
+      </header>
+
+      <main className="calculator">
+        <section className="display">
+          <div className="expression">{expression}</div>
+          <div className="preview">{preview !== null ? preview : '\u00a0'}</div>
+        </section>
+
+        <section className="panels">
+          <article className="panel panel--scientific">
+            <p className="panel__title">Scientific</p>
+            <div className="grid grid--6">
+              {SCIENTIFIC_KEYS.map((key) => (
+                <Button key={key} label={key} variant="ghost" onPress={() => appendFunction(key)} />
               ))}
-            </article>
-            <article className='grid grid-cols-4 gap-2 mt-2'>
-              {["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "+", "0", ".", "=", "-"].map(label => (
-                <div key={label} className="flex justify-center">
-                  <Button label={label} onClick={handleButtonClick} />
-                </div>
+            </div>
+          </article>
+
+          <article className="panel panel--memory">
+            <p className="panel__title">Memory</p>
+            <div className="grid grid--4">
+              {MEMORY_KEYS.map((key) => (
+                <Button key={key} label={key} variant="ghost" onPress={() => handleMemory(key)} />
               ))}
-            </article>
-          </section>
-        </main>
-      </div>
+            </div>
+            <p className="memory__value">MEM: {memory}</p>
+          </article>
+        </section>
+
+        <article className="panel panel--core">
+          <div className="grid grid--4">
+            {CORE_KEYS.map((key) => (
+              <Button
+                key={key}
+                label={key}
+                variant={key === '=' ? 'primary' : key === 'AC' ? 'danger' : key === 'DEL' ? 'warn' : 'default'}
+                onPress={() => handleCore(key)}
+              />
+            ))}
+          </div>
+        </article>
+      </main>
+
       {showHistory && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-4 rounded-lg max-w-md w-full">
-            <h2 className="text-lg font-bold mb-2">Calculation History</h2>
-            <ul className="max-h-60 overflow-y-auto">
-              {history.map((entry, index) => (
-                <li key={index} className="border-b border-gray-300 p-2">{entry}</li>
-              ))}
-            </ul>
-            <div className="flex justify-between mt-4">
-              <button onClick={clearHistory} className="bg-red-500 text-white p-2 rounded">Clear History</button>
-              <button onClick={closeHistory} className="bg-gray-700 text-white p-2 rounded">Close</button>
+        <aside className="history">
+          <div className="history__header">
+            <h2>History</h2>
+            <div className="header__actions">
+              <button className="ghost" onClick={() => setHistory([])}>Clear</button>
+              <button className="ghost" onClick={() => setShowHistory(false)}>Close</button>
             </div>
           </div>
-        </div>
+          <ul>
+            {history.length === 0 && <li className="muted">No history yet.</li>}
+            {history.map((entry, index) => (
+              <li key={index}>{entry}</li>
+            ))}
+          </ul>
+        </aside>
       )}
-    </>
+    </div>
   );
 }
 
-const Button = ({ label, onClick, bgColor }) => {
-  return (
-    <button
-      className={`text-white text-lg rounded-lg p-4 hover:bg-gray-600 transition duration-200 w-full ${bgColor}`}
-      onClick={() => onClick(label)}
-    >
-      {label}
-    </button>
-  );
-}
+const Button = ({ label, onPress, variant = 'default' }) => (
+  <button className={`btn btn--${variant}`} onClick={onPress}>
+    {label}
+  </button>
+);
+
+const formatResult = (value) => {
+  if (!Number.isFinite(value)) return value;
+  const abs = Math.abs(value);
+  if ((abs >= 1e12 || (abs > 0 && abs < 1e-6))) {
+    return Number(value).toExponential(10).replace(/\.0+e/, 'e');
+  }
+  return Number(value.toPrecision(12)).toString();
+};
+
+const evaluateExpression = (rawExpression, ans = 0) => {
+  const cleaned = rawExpression
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/π/g, 'Math.PI')
+    .replace(/%/g, '*0.01')
+    .replace(/\^/g, '**')
+    .replace(/abs\(/g, 'Math.abs(')
+    .replace(/√\(/g, 'Math.sqrt(')
+    .replace(/log\(/g, 'Math.log10(')
+    .replace(/ln\(/g, 'Math.log(')
+    .replace(/sin\(/g, 'Math.sin(')
+    .replace(/cos\(/g, 'Math.cos(')
+    .replace(/tan\(/g, 'Math.tan(')
+    .replace(/ANS/g, ans)
+    .replace(/!/g, 'FACT');
+
+  const factorialWrapped = cleaned.replace(/(\([^()]+\)|\d+(?:\.\d+)?)FACT/g, (_, operand) => `factorial(${operand})`);
+
+  if (/[^0-9+\-*/().\s^%A-Za-z]/.test(factorialWrapped)) {
+    throw new Error('Invalid characters in expression');
+  }
+
+  const evaluator = new Function('factorial', `"use strict"; return (${factorialWrapped});`);
+  return evaluator(factorial);
+};
+
+const factorial = (n) => {
+  if (n < 0) throw new Error('Negative factorial');
+  if (n === 0 || n === 1) return 1;
+  let res = 1;
+  for (let i = 2; i <= n; i += 1) res *= i;
+  return res;
+};
 
 export default App;
