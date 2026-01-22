@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const SCIENTIFIC_KEYS = [
